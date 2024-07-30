@@ -1,0 +1,12 @@
+services:
+  pg_notifelect:
+    build:
+      context: .
+      dockerfile: test/db/Dockerfile
+    ports:
+      - "5432:5432"
+    tmpfs:
+      - /var/lib/pg/data
+    environment:
+      PGDATA: /var/lib/pg/data
+    restart: "no"

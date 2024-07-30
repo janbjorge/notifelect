@@ -1,0 +1,71 @@
+name: Test notifelect
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+
+  linting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up python
+        uses: actions/setup-python@v4
+      - name: Install dev-env.
+        run: |
+          pip install -U pip
+          pip install ".[dev]"
+
+      - name: Ruff check
+        if: ${{ always() }}
+        run: ruff check .
+
+      - name: Ruff format
+        if: ${{ always() }}
+        run: ruff format . --check
+
+      - name: Mypy
+        if: ${{ always() }}
+        run: mypy .
+
+  test-notifelectr:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest]
+
+    env:
+      PGHOST: localhost
+      PGUSER: testuser
+      PGPASSWORD: testpassword
+      PGDATABASE: testdb
+      PGPORT: 5432
+
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build custom PostgreSQL Docker image
+        run: |
+          docker compose up -d
+
+      - name: Install notifelectr
+        run: |
+          pip install pip -U
+          pip install ".[dev]"
+
+      - name: Full test
+        run: pytest -vs
+
