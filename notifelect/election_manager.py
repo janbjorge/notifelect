@@ -57,6 +57,10 @@ class Coordinator:
         default_factory=tm.TaskManager,
         init=False,
     )
+    run_election: bool = dataclasses.field(
+        default=True,
+        init=False,
+    )
 
     queries: queries.Queries = dataclasses.field(
         init=False,
@@ -182,7 +186,7 @@ class Coordinator:
         and collecting pong responses to determine the election winner based
         on message sequences.
         """
-        while True:
+        while self.run_election:
             # Start an election
             await asyncio.sleep(self.election_interval.total_seconds())
             logconfig.logger.debug("Election ping emitted")
@@ -221,6 +225,7 @@ class Coordinator:
         Asynchronous context manager exit point that cleans up by removing
         listeners and completing any remaining tasks.
         """
+        self.run_election = False
         await self.connection.remove_listener(
             self.queries.query_builder.channel,
             self.parse_and_dispatch,  # type: ignore[arg-type]
