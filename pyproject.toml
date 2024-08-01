@@ -61,7 +61,6 @@ write_to = "notifelect/_version.py"
 
 [tool.ruff]
 line-length = 100
-exclude = ["notifelect/_version.py"]
 
 [tool.ruff.lint]
 select = [
