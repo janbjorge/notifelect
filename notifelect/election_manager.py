@@ -20,6 +20,28 @@ class Outcome:
 
 
 @dataclasses.dataclass
+class MessageCreator:
+    namespace: str
+    process_id: uuid.UUID
+    queries: queries.Queries
+
+    def create_message(
+        self,
+        type: Literal["Ping", "Pong"],
+        sequence: models.Sequence,
+    ) -> models.MessageExchange:
+        return models.MessageExchange(
+            channel=self.queries.query_builder.channel,
+            message_id=uuid.uuid4(),
+            namespace=self.namespace,
+            process_id=self.process_id,
+            sent_at=datetime.now(tz=timezone.utc),
+            sequence=sequence,
+            type=type,
+        )
+
+
+@dataclasses.dataclass
 class Coordinator:
     """
     Based on: https://www.cs.colostate.edu/~cs551/CourseNotes/Synchronization/BullyExample.html
@@ -65,6 +87,9 @@ class Coordinator:
     queries: queries.Queries = dataclasses.field(
         init=False,
     )
+    message_creator: MessageCreator = dataclasses.field(
+        init=False,
+    )
 
     def __post_init__(self) -> None:
         """
@@ -72,6 +97,11 @@ class Coordinator:
         required database operations post dataclass instantiation.
         """
         self.queries = queries.Queries(self.connection)
+        self.message_creator = MessageCreator(
+            self.namespace,
+            self.process_id,
+            self.queries,
+        )
 
     def create_message(
         self,
@@ -98,14 +128,20 @@ class Coordinator:
         Creates a 'Pong' message using the create_message method with the type
         set to 'Pong'.
         """
-        return self.create_message("Pong")
+        return self.message_creator.create_message(
+            "Pong",
+            self.sequence,
+        )
 
     def create_ping(self) -> models.MessageExchange:
         """
         Creates a 'Ping' message using the create_message method with the type
         set to 'Ping'.
         """
-        return self.create_message("Ping")
+        return self.message_creator.create_message(
+            "Ping",
+            self.sequence,
+        )
 
     def handle_ping(self, ping: models.MessageExchange) -> None:
         """
