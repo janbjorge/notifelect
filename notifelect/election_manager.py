@@ -44,8 +44,7 @@ class Settings:
 
 @dataclasses.dataclass
 class MessageCreator:
-    namespace: str
-    process_id: uuid.UUID
+    settings: Settings
     queries: queries.Queries
 
     def create_message(
@@ -56,12 +55,32 @@ class MessageCreator:
         return models.MessageExchange(
             channel=self.queries.query_builder.channel,
             message_id=uuid.uuid4(),
-            namespace=self.namespace,
-            process_id=self.process_id,
+            namespace=self.settings.namespace,
+            process_id=self.settings.process_id,
             sent_at=datetime.now(tz=timezone.utc),
             sequence=sequence,
             type=type,
         )
+
+    def create_pong(
+        self,
+        sequence: models.Sequence,
+    ) -> models.MessageExchange:
+        """
+        Creates a 'Pong' message using the create_message method with the type
+        set to 'Pong'.
+        """
+        return self.create_message("Pong", sequence)
+
+    def create_ping(
+        self,
+        sequence: models.Sequence,
+    ) -> models.MessageExchange:
+        """
+        Creates a 'Ping' message using the create_message method with the type
+        set to 'Ping'.
+        """
+        return self.create_message("Ping", sequence)
 
 
 @dataclasses.dataclass
@@ -107,49 +126,8 @@ class Coordinator:
         """
         self.queries = queries.Queries(self.connection)
         self.message_creator = MessageCreator(
-            self.settings.namespace,
-            self.settings.process_id,
+            self.settings,
             self.queries,
-        )
-
-    def create_message(
-        self,
-        type: Literal["Ping", "Pong"],
-    ) -> models.MessageExchange:
-        """
-        Constructs a message object of a specified type ('Ping' or 'Pong') with
-        appropriate attributes such as channel, message_id, and others
-        according to the current state.
-        """
-
-        return models.MessageExchange(
-            channel=self.queries.query_builder.channel,
-            message_id=uuid.uuid4(),
-            namespace=self.settings.namespace,
-            process_id=self.settings.process_id,
-            sent_at=datetime.now(tz=timezone.utc),
-            sequence=self.sequence,
-            type=type,
-        )
-
-    def create_pong(self) -> models.MessageExchange:
-        """
-        Creates a 'Pong' message using the create_message method with the type
-        set to 'Pong'.
-        """
-        return self.message_creator.create_message(
-            "Pong",
-            self.sequence,
-        )
-
-    def create_ping(self) -> models.MessageExchange:
-        """
-        Creates a 'Ping' message using the create_message method with the type
-        set to 'Ping'.
-        """
-        return self.message_creator.create_message(
-            "Ping",
-            self.sequence,
         )
 
     def handle_ping(self, ping: models.MessageExchange) -> None:
@@ -170,7 +148,11 @@ class Coordinator:
                 ping.sequence,
             )
             self.tm.add(
-                asyncio.create_task(self.queries.emit(self.create_pong())),
+                asyncio.create_task(
+                    self.queries.emit(
+                        self.message_creator.create_pong(self.sequence),
+                    )
+                ),
             )
 
     def handle_pong(self, pong: models.MessageExchange) -> None:
@@ -235,7 +217,11 @@ class Coordinator:
             # Start an election
             await asyncio.sleep(self.settings.election_interval.total_seconds())
             logconfig.logger.debug("Election ping emitted")
-            await self.queries.emit(self.create_ping())
+            await self.queries.emit(
+                self.message_creator.create_ping(
+                    self.sequence,
+                )
+            )
 
             # Wait for votes to come in.
             await asyncio.sleep(self.settings.election_timeout.total_seconds())
@@ -262,7 +248,11 @@ class Coordinator:
             self.queries.query_builder.channel,
             lambda *x: self.parse_and_dispatch(x[-1]),
         )
-        await self.queries.emit(self.create_ping())
+        await self.queries.emit(
+            self.message_creator.create_ping(
+                self.sequence,
+            )
+        )
         return self.outcome
 
     async def __aexit__(self, *_: object) -> None:
@@ -276,5 +266,9 @@ class Coordinator:
             self.parse_and_dispatch,  # type: ignore[arg-type]
         )
         # Give `next in line` a chance to pick up quick.
-        await self.queries.emit(self.create_ping())
+        await self.queries.emit(
+            self.message_creator.create_ping(
+                models.Sequence(0),
+            )
+        )
         await asyncio.gather(*self.tm.tasks)
