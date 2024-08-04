@@ -62,24 +62,24 @@ class MessageCreator:
             type=type,
         )
 
-    def create_pong(self) -> models.MessageExchange:
+    def pong(self) -> models.MessageExchange:
         """
         Creates a 'Pong' message using the create_message method with the type
         set to 'Pong'.
         """
         return self.create_message("Pong", self.settings.sequence)
 
-    def create_ping(self) -> models.MessageExchange:
+    def ping(self) -> models.MessageExchange:
         """
         Creates a 'Ping' message using the create_message method with the type
         set to 'Ping'.
         """
         return self.create_message("Ping", self.settings.sequence)
 
-    def create_zero_ping(self) -> models.MessageExchange:
+    def zero_ping(self) -> models.MessageExchange:
         """
-        PG sequence starts at 1, emitting a zero should ensure that
-        will be a real winner asap.
+        PG sequence starts at one(1), emitting a zero(0) should ensure that
+        there will be a real winner asap.
         """
         return self.create_message("Ping", models.Sequence(0))
 
@@ -112,7 +112,7 @@ class Electoral:
             # Start an election
             await asyncio.sleep(self.settings.election_interval.total_seconds())
             logconfig.logger.debug("Election ping emitted")
-            await self.queries.notify(self.message_creator.create_ping())
+            await self.queries.notify(self.message_creator.ping())
 
             # Wait for votes to come in.
             await asyncio.sleep(self.settings.election_timeout.total_seconds())
@@ -192,7 +192,7 @@ class Coordinator:
             self.tm.add(
                 asyncio.create_task(
                     self.queries.notify(
-                        self.message_creator.create_pong(),
+                        self.message_creator.pong(),
                     )
                 ),
             )
@@ -263,7 +263,7 @@ class Coordinator:
         )
 
         # Notify that there is a potential new sheriff in town.
-        await self.queries.notify(self.message_creator.create_ping())
+        await self.queries.notify(self.message_creator.ping())
         return self.electoral.outcome
 
     async def __aexit__(self, *_: object) -> None:
@@ -277,5 +277,5 @@ class Coordinator:
             self.parse_and_dispatch,  # type: ignore[arg-type]
         )
         # Give `next in line` a chance to pick up quick.
-        await self.queries.notify(self.message_creator.create_zero_ping())
+        await self.queries.notify(self.message_creator.zero_ping())
         await asyncio.gather(*self.tm.tasks)
