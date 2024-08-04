@@ -149,7 +149,7 @@ class Coordinator:
             )
             self.tm.add(
                 asyncio.create_task(
-                    self.queries.emit(
+                    self.queries.notify(
                         self.message_creator.create_pong(self.sequence),
                     )
                 ),
@@ -217,7 +217,7 @@ class Coordinator:
             # Start an election
             await asyncio.sleep(self.settings.election_interval.total_seconds())
             logconfig.logger.debug("Election ping emitted")
-            await self.queries.emit(
+            await self.queries.notify(
                 self.message_creator.create_ping(
                     self.sequence,
                 )
@@ -248,7 +248,7 @@ class Coordinator:
             self.queries.query_builder.channel,
             lambda *x: self.parse_and_dispatch(x[-1]),
         )
-        await self.queries.emit(
+        await self.queries.notify(
             self.message_creator.create_ping(
                 self.sequence,
             )
@@ -266,7 +266,7 @@ class Coordinator:
             self.parse_and_dispatch,  # type: ignore[arg-type]
         )
         # Give `next in line` a chance to pick up quick.
-        await self.queries.emit(
+        await self.queries.notify(
             self.message_creator.create_ping(
                 models.Sequence(0),
             )
