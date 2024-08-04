@@ -20,6 +20,29 @@ class Outcome:
 
 
 @dataclasses.dataclass
+class Settings:
+    namespace: str = dataclasses.field(
+        default="",
+    )
+
+    election_interval: timedelta = dataclasses.field(
+        default=timedelta(seconds=20),
+    )
+    election_timeout: timedelta = dataclasses.field(
+        default=timedelta(seconds=5),
+    )
+
+    process_id: uuid.UUID = dataclasses.field(
+        default_factory=uuid.uuid4,
+        init=False,
+    )
+    sequence: models.Sequence = dataclasses.field(
+        default=models.Sequence(0),
+        init=False,
+    )
+
+
+@dataclasses.dataclass
 class MessageCreator:
     namespace: str
     process_id: uuid.UUID
@@ -48,16 +71,6 @@ class Coordinator:
     """
 
     connection: asyncpg.Connection
-    namespace: str = dataclasses.field(
-        default="",
-    )
-
-    election_interval: timedelta = dataclasses.field(
-        default=timedelta(seconds=20),
-    )
-    election_timeout: timedelta = dataclasses.field(
-        default=timedelta(seconds=5),
-    )
     ballots: list[models.MessageExchange] = dataclasses.field(
         default_factory=list,
         init=False,
@@ -67,14 +80,7 @@ class Coordinator:
         default_factory=Outcome,
         init=False,
     )
-    process_id: uuid.UUID = dataclasses.field(
-        default_factory=uuid.uuid4,
-        init=False,
-    )
-    sequence: models.Sequence = dataclasses.field(
-        default=models.Sequence(0),
-        init=False,
-    )
+
     tm: tm.TaskManager = dataclasses.field(
         default_factory=tm.TaskManager,
         init=False,
@@ -84,6 +90,9 @@ class Coordinator:
         init=False,
     )
 
+    settings: Settings = dataclasses.field(
+        default_factory=Settings,
+    )
     queries: queries.Queries = dataclasses.field(
         init=False,
     )
@@ -98,8 +107,8 @@ class Coordinator:
         """
         self.queries = queries.Queries(self.connection)
         self.message_creator = MessageCreator(
-            self.namespace,
-            self.process_id,
+            self.settings.namespace,
+            self.settings.process_id,
             self.queries,
         )
 
@@ -116,8 +125,8 @@ class Coordinator:
         return models.MessageExchange(
             channel=self.queries.query_builder.channel,
             message_id=uuid.uuid4(),
-            namespace=self.namespace,
-            process_id=self.process_id,
+            namespace=self.settings.namespace,
+            process_id=self.settings.process_id,
             sent_at=datetime.now(tz=timezone.utc),
             sequence=self.sequence,
             type=type,
@@ -196,10 +205,10 @@ class Coordinator:
             parsed.namespace,
         )
 
-        if parsed.namespace != self.namespace:
+        if parsed.namespace != self.settings.namespace:
             logconfig.logger.warning(
                 "Ignoring message due to namespace mismatch: expected: %s, received: %s",
-                self.namespace,
+                self.settings.namespace,
                 parsed.namespace,
             )
             return None
@@ -224,12 +233,12 @@ class Coordinator:
         """
         while self.run_election:
             # Start an election
-            await asyncio.sleep(self.election_interval.total_seconds())
+            await asyncio.sleep(self.settings.election_interval.total_seconds())
             logconfig.logger.debug("Election ping emitted")
             await self.queries.emit(self.create_ping())
 
             # Wait for votes to come in.
-            await asyncio.sleep(self.election_timeout.total_seconds())
+            await asyncio.sleep(self.settings.election_timeout.total_seconds())
 
             # Pick winner.
             max_sequence = max(p.sequence for p in self.ballots)
