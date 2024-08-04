@@ -54,7 +54,7 @@ class QueryBuilder:
     SELECT nextval('{self.sequence}');
     """
 
-    def create_emit_query(self) -> str:
+    def create_notify_query(self) -> str:
         return f"""
     SELECT pg_notify('{self.channel}', $1);
     """
@@ -87,9 +87,9 @@ class Queries:
                 )
             )
 
-    async def emit(self, event: models.BaseModel) -> None:
+    async def notify(self, event: models.BaseModel) -> None:
         async with self.lock:
             await self.connection.execute(
-                self.query_builder.create_emit_query(),
+                self.query_builder.create_notify_query(),
                 event.model_dump_json(),
             )
