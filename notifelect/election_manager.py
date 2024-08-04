@@ -62,25 +62,26 @@ class MessageCreator:
             type=type,
         )
 
-    def create_pong(
-        self,
-        sequence: models.Sequence,
-    ) -> models.MessageExchange:
+    def create_pong(self) -> models.MessageExchange:
         """
         Creates a 'Pong' message using the create_message method with the type
         set to 'Pong'.
         """
-        return self.create_message("Pong", sequence)
+        return self.create_message("Pong", self.settings.sequence)
 
-    def create_ping(
-        self,
-        sequence: models.Sequence,
-    ) -> models.MessageExchange:
+    def create_ping(self) -> models.MessageExchange:
         """
         Creates a 'Ping' message using the create_message method with the type
         set to 'Ping'.
         """
-        return self.create_message("Ping", sequence)
+        return self.create_message("Ping", self.settings.sequence)
+
+    def create_zero_ping(self) -> models.MessageExchange:
+        """
+        PG sequence starts at 1, emitting a zero should ensure that
+        will be a real winner asap.
+        """
+        return self.create_message("Ping", models.Sequence(0))
 
 
 @dataclasses.dataclass
@@ -141,16 +142,17 @@ class Coordinator:
             ping.process_id,
             ping.sequence,
         )
-        if self.sequence >= ping.sequence:
+        if self.settings.sequence >= ping.sequence:
             logconfig.logger.debug(
                 "Responding with Pong: higher or equal sequence received; our: %d, incoming: %d",
-                self.sequence,
+                self.settings.sequence,
                 ping.sequence,
             )
+            assert self.settings.sequence > 0
             self.tm.add(
                 asyncio.create_task(
                     self.queries.notify(
-                        self.message_creator.create_pong(self.sequence),
+                        self.message_creator.create_pong(),
                     )
                 ),
             )
@@ -217,23 +219,19 @@ class Coordinator:
             # Start an election
             await asyncio.sleep(self.settings.election_interval.total_seconds())
             logconfig.logger.debug("Election ping emitted")
-            await self.queries.notify(
-                self.message_creator.create_ping(
-                    self.sequence,
-                )
-            )
+            await self.queries.notify(self.message_creator.create_ping())
 
             # Wait for votes to come in.
             await asyncio.sleep(self.settings.election_timeout.total_seconds())
 
             # Pick winner.
             max_sequence = max(p.sequence for p in self.ballots)
-            self.outcome.winner = max_sequence == self.sequence
+            self.outcome.winner = max_sequence == self.settings.sequence
             self.ballots.clear()
             logconfig.logger.debug(
                 "Election concluded, winner determined: %s (sequence: %s)",
                 "me" if self.outcome.winner else "other",
-                self.sequence,
+                self.settings.sequence,
             )
 
     async def __aenter__(self) -> Outcome:
@@ -242,17 +240,15 @@ class Coordinator:
         process and sets up necessary listeners for incoming messages.
         """
 
-        self.sequence = await self.queries.sequence()
+        self.settings.sequence = await self.queries.sequence()
         self.tm.add(asyncio.create_task(self.routine_election()))
         await self.connection.add_listener(
             self.queries.query_builder.channel,
             lambda *x: self.parse_and_dispatch(x[-1]),
         )
-        await self.queries.notify(
-            self.message_creator.create_ping(
-                self.sequence,
-            )
-        )
+
+        # Notify that there is a potential new sheriff in town.
+        await self.queries.notify(self.message_creator.create_ping())
         return self.outcome
 
     async def __aexit__(self, *_: object) -> None:
@@ -266,9 +262,5 @@ class Coordinator:
             self.parse_and_dispatch,  # type: ignore[arg-type]
         )
         # Give `next in line` a chance to pick up quick.
-        await self.queries.notify(
-            self.message_creator.create_ping(
-                models.Sequence(0),
-            )
-        )
+        await self.queries.notify(self.message_creator.create_zero_ping())
         await asyncio.gather(*self.tm.tasks)

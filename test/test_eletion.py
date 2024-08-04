@@ -22,12 +22,11 @@ async def connection() -> AsyncGenerator[asyncpg.Connection, None]:
 
 @pytest.mark.parametrize("N", (1, 3, 25))
 async def test_one_winner(N: int) -> None:
-    settings = Settings(
-        election_interval=timedelta(seconds=0.5),
-        election_timeout=timedelta(seconds=0.1),
-    )
-
     async def process() -> Outcome:
+        settings = Settings(
+            election_interval=timedelta(seconds=0.5),
+            election_timeout=timedelta(seconds=0.1),
+        )
         async with (
             connection() as conn,
             Coordinator(conn, settings=settings) as outcome,
