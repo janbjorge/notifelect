@@ -20,7 +20,7 @@ async def connection() -> AsyncGenerator[asyncpg.Connection, None]:
         await conn.close()
 
 
-@pytest.mark.parametrize("N", (1, 3, 25))
+@pytest.mark.parametrize("N", (1, 2, 3, 5, 25))
 async def test_one_winner(N: int) -> None:
     async def process() -> Outcome:
         settings = Settings(
