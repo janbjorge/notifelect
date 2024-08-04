@@ -85,24 +85,16 @@ class MessageCreator:
 
 
 @dataclasses.dataclass
-class Coordinator:
-    """
-    Based on: https://www.cs.colostate.edu/~cs551/CourseNotes/Synchronization/BullyExample.html
-    """
-
-    connection: asyncpg.Connection
+class Electoral:
+    settings: Settings
+    queries: queries.Queries
+    message_creator: MessageCreator
     ballots: list[models.MessageExchange] = dataclasses.field(
         default_factory=list,
         init=False,
     )
-
     outcome: Outcome = dataclasses.field(
         default_factory=Outcome,
-        init=False,
-    )
-
-    tm: tm.TaskManager = dataclasses.field(
-        default_factory=tm.TaskManager,
         init=False,
     )
     run_election: bool = dataclasses.field(
@@ -110,8 +102,51 @@ class Coordinator:
         init=False,
     )
 
+    async def routine_election(self) -> None:
+        """
+        Continuously runs the election process at intervals, initiating pings
+        and collecting pong responses to determine the election winner based
+        on message sequences.
+        """
+        while self.run_election:
+            # Start an election
+            await asyncio.sleep(self.settings.election_interval.total_seconds())
+            logconfig.logger.debug("Election ping emitted")
+            await self.queries.notify(self.message_creator.create_ping())
+
+            # Wait for votes to come in.
+            await asyncio.sleep(self.settings.election_timeout.total_seconds())
+
+            # Pick winner.
+            max_sequence = max(p.sequence for p in self.ballots)
+            self.outcome.winner = max_sequence == self.settings.sequence
+            self.ballots.clear()
+            logconfig.logger.debug(
+                "Election concluded, winner determined: %s (sequence: %s)",
+                "me" if self.outcome.winner else "other",
+                self.settings.sequence,
+            )
+
+
+@dataclasses.dataclass
+class Coordinator:
+    """
+    Based on: https://www.cs.colostate.edu/~cs551/CourseNotes/Synchronization/BullyExample.html
+    """
+
+    connection: asyncpg.Connection
+
     settings: Settings = dataclasses.field(
         default_factory=Settings,
+    )
+
+    tm: tm.TaskManager = dataclasses.field(
+        default_factory=tm.TaskManager,
+        init=False,
+    )
+
+    electoral: Electoral = dataclasses.field(
+        init=False,
     )
     queries: queries.Queries = dataclasses.field(
         init=False,
@@ -129,6 +164,11 @@ class Coordinator:
         self.message_creator = MessageCreator(
             self.settings,
             self.queries,
+        )
+        self.electoral = Electoral(
+            self.settings,
+            self.queries,
+            self.message_creator,
         )
 
     def handle_ping(self, ping: models.MessageExchange) -> None:
@@ -167,7 +207,7 @@ class Coordinator:
             pong.message_id,
             pong.process_id,
         )
-        self.ballots.append(pong)
+        self.electoral.ballots.append(pong)
 
     def parse_and_dispatch(self, payload: str) -> None:
         """
@@ -209,31 +249,6 @@ class Coordinator:
         )
         raise NotImplementedError(parsed)
 
-    async def routine_election(self) -> None:
-        """
-        Continuously runs the election process at intervals, initiating pings
-        and collecting pong responses to determine the election winner based
-        on message sequences.
-        """
-        while self.run_election:
-            # Start an election
-            await asyncio.sleep(self.settings.election_interval.total_seconds())
-            logconfig.logger.debug("Election ping emitted")
-            await self.queries.notify(self.message_creator.create_ping())
-
-            # Wait for votes to come in.
-            await asyncio.sleep(self.settings.election_timeout.total_seconds())
-
-            # Pick winner.
-            max_sequence = max(p.sequence for p in self.ballots)
-            self.outcome.winner = max_sequence == self.settings.sequence
-            self.ballots.clear()
-            logconfig.logger.debug(
-                "Election concluded, winner determined: %s (sequence: %s)",
-                "me" if self.outcome.winner else "other",
-                self.settings.sequence,
-            )
-
     async def __aenter__(self) -> Outcome:
         """
         Asynchronous context manager entry point that starts the election
@@ -241,7 +256,7 @@ class Coordinator:
         """
 
         self.settings.sequence = await self.queries.sequence()
-        self.tm.add(asyncio.create_task(self.routine_election()))
+        self.tm.add(asyncio.create_task(self.electoral.routine_election()))
         await self.connection.add_listener(
             self.queries.query_builder.channel,
             lambda *x: self.parse_and_dispatch(x[-1]),
@@ -249,14 +264,14 @@ class Coordinator:
 
         # Notify that there is a potential new sheriff in town.
         await self.queries.notify(self.message_creator.create_ping())
-        return self.outcome
+        return self.electoral.outcome
 
     async def __aexit__(self, *_: object) -> None:
         """
         Asynchronous context manager exit point that cleans up by removing
         listeners and completing any remaining tasks.
         """
-        self.run_election = False
+        self.electoral.run_election = False
         await self.connection.remove_listener(
             self.queries.query_builder.channel,
             self.parse_and_dispatch,  # type: ignore[arg-type]
