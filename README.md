@@ -7,14 +7,12 @@ Notifelect is a Python package designed for seamless leader election in distribu
 - **Asynchronous Operations**: Built with asyncio, allowing for non-blocking, event-driven communication.
 - **Easy to Integrate**: Simple API that fits naturally into existing Python applications.
 
-Enhance your distributed systems with Notifelect’s efficient leader election mechanism for improved reliability and performance.
-
 ## Getting Started
 Installation is straightforward using pip:
 
 ```bash
 pip install notifelect
-python -m notifelect install  # Set up necessary database sequences
+python -m notifelect install  # Set the necessary database sequence.
 ```
 
 ## Quick Example
@@ -52,9 +50,25 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### Enhancements
-- **Clear Value Proposition**: Begins with why Notifelect is beneficial and its specific features.
-- **Streamlined Setup and Example**: Simplified instructions and example for easier comprehension and quicker start.
-- **Engaging Introduction**: More direct and impactful opening to grab attention immediately.
+## Understanding the Bully Algorithm
 
-These changes are intended to make the README not only more attractive but also more user-friendly, encouraging community use and contributions.
+The Bully Algorithm is employed by Notifelect to ensure the most suitable node takes leadership in the event of failures or when an election is triggered. Here's how it works:
+
+1. **Election Trigger**: Any node can initiate an election, typically when it detects the absence or failure of the current leader.
+2. **Candidate Assertion**: The initiating node sends a 'challenge' to all other nodes with higher IDs (or other priority metrics).
+3. **Dominance Establishment**: Responding nodes with higher IDs take over the election process, ensuring the node with the highest priority becomes the leader.
+4. **Leader Announcement**: The winning node broadcasts its status as the leader to all other nodes. (TODO)
+
+### Benefits of the Bully Algorithm
+- **Fault Tolerance**: Automatically recovers from leader failures, maintaining system stability.
+- **Fair Leadership**: The highest priority node always leads, optimizing decision-making processes.
+- **Decentralized Control**: No single point of failure, enhancing system resilience.
+
+## Configuring Settings
+
+Notifelect allows for fine-tuning of various parameters to adapt the election process to specific system requirements:
+
+- **Namespace**: Limits the scope of the election to prevent interference from unrelated processes.
+- **Election Interval and Timeout**: Manage the frequency and responsiveness of the election process, allowing for customization based on network conditions and system scale.
+
+Adjusting these settings can be done during the initialization of the `Coordinator` component, ensuring that each deployment of Notifelect is optimized for its specific environment and use case.
