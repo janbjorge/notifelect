@@ -106,14 +106,14 @@ class ElectionRound:
         except asyncio.TimeoutError:
             return True  # time elapsed normally
 
-    async def run(self) -> None:
+    async def run(self, outbox: asyncio.Queue[models.MessageExchange]) -> None:
         """Election loop: ping, collect pongs, pick winner, repeat."""
         while not self._shutdown.is_set():
             if not await self._sleep_unless_shutdown(self.settings.election_interval):
                 return
 
             logconfig.logger.debug("Election ping emitted")
-            await self._queries.notify(self._messages.ping())
+            outbox.put_nowait(self._messages.ping())
 
             if not await self._sleep_unless_shutdown(self.settings.election_timeout):
                 return
@@ -155,6 +155,10 @@ class Coordinator:
     _round: ElectionRound = dataclasses.field(init=False)
     _queries: queries.Queries = dataclasses.field(init=False)
     _messages: MessageFactory = dataclasses.field(init=False)
+    _outbox: asyncio.Queue[models.MessageExchange] = dataclasses.field(
+        default_factory=asyncio.Queue,
+        init=False,
+    )
 
     def __post_init__(self) -> None:
         self._queries = queries.Queries(self.connection)
@@ -181,7 +185,7 @@ class Coordinator:
                 self.settings.sequence,
                 ping.sequence,
             )
-            self._tasks.add(asyncio.create_task(self._queries.notify(self._messages.pong())))
+            self._outbox.put_nowait(self._messages.pong())
 
     def _handle_pong(self, pong: models.MessageExchange) -> None:
         logconfig.logger.debug(
@@ -218,24 +222,49 @@ class Coordinator:
             logconfig.logger.error("Unknown message type: %s", parsed.type)
             raise NotImplementedError(parsed)
 
+    async def _outbox_worker(self) -> None:
+        """Drain the outbox queue, sending messages one at a time."""
+        while True:
+            message = await self._outbox.get()
+            try:
+                await self._queries.notify(message)
+            except Exception:
+                logconfig.logger.exception("Failed to send outbox message")
+
     async def __aenter__(self) -> ElectionResult:
         self.settings.sequence = await self._queries.next_sequence()
-        self._tasks.add(asyncio.create_task(self._round.run()))
+        self._tasks.add(asyncio.create_task(self._outbox_worker()))
+        self._tasks.add(asyncio.create_task(self._round.run(self._outbox)))
         await self.connection.add_listener(
             self._queries.sql.channel,
             self._on_notification,
         )
 
         # Announce ourselves to trigger an immediate election.
-        await self._queries.notify(self._messages.ping())
+        self._outbox.put_nowait(self._messages.ping())
         return self._round.result
 
     async def __aexit__(self, *_: object) -> None:
+        # 1. Stop the election loop so no more pings are enqueued.
         self._round._shutdown.set()
+        # 2. Signal the outbox worker to finish: enqueue a None sentinel
+        #    and wait for it to drain.  Then cancel remaining tasks.
+        self._outbox.put_nowait(self._messages.zero_ping())
+        # 3. Remove listener so no more notifications enqueue pongs.
+        #    Wait briefly for in-flight outbox sends to complete.
+        for task in list(self._tasks.tasks):
+            task.cancel()
+        await asyncio.gather(*self._tasks.tasks, return_exceptions=True)
         await self.connection.remove_listener(
             self._queries.sql.channel,
             self._on_notification,
         )
+        # 4. Drain any remaining outbox messages serially.
+        while not self._outbox.empty():
+            try:
+                message = self._outbox.get_nowait()
+                await self._queries.notify(message)
+            except Exception:
+                logconfig.logger.exception("Failed to send remaining outbox message")
         # Give the next-in-line a chance to win quickly.
         await self._queries.notify(self._messages.zero_ping())
-        await asyncio.gather(*self._tasks.tasks)
