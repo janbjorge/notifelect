@@ -57,9 +57,7 @@ def cliparser() -> argparse.Namespace:
 
     common_arguments.add_argument(
         "--pg-user",
-        help=(
-            "Database role for authentication. Defaults to PGUSER environment " "variable if set."
-        ),
+        help=("Database role for authentication. Defaults to PGUSER environment variable if set."),
         default=os.environ.get("PGUSER"),
     )
 
@@ -74,7 +72,7 @@ def cliparser() -> argparse.Namespace:
 
     common_arguments.add_argument(
         "--pg-password",
-        help=("Password for authentication. Defaults to PGPASSWORD " "environment variable if set"),
+        help=("Password for authentication. Defaults to PGPASSWORD environment variable if set"),
         default=os.environ.get("PGPASSWORD"),
     )
 
