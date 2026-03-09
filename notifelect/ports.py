@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
+
+from notifelect.models import Listener
 
 
 @runtime_checkable
@@ -28,7 +30,7 @@ class BackendPort(Protocol):
     async def subscribe(
         self,
         channel: str,
-        callback: Callable[..., Any],
+        callback: Listener,
     ) -> None:
         """Register *callback* to receive messages on *channel*."""
         ...
@@ -36,7 +38,7 @@ class BackendPort(Protocol):
     async def unsubscribe(
         self,
         channel: str,
-        callback: Callable[..., Any],
+        callback: Listener,
     ) -> None:
         """Remove a previously registered *callback* from *channel*."""
         ...

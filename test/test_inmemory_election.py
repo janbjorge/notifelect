@@ -63,8 +63,8 @@ async def test_inmemory_unsubscribe() -> None:
 async def test_inmemory_shared_registry() -> None:
     """Two backends sharing a registry see each other's messages."""
     registry = InMemoryBackend.create_registry()
-    b1 = InMemoryBackend(_registry=registry)
-    b2 = InMemoryBackend(_registry=registry)
+    b1 = InMemoryBackend(registry=registry)
+    b2 = InMemoryBackend(registry=registry)
 
     received: list[str] = []
     await b2.subscribe("ch", lambda p: received.append(p))
@@ -75,8 +75,8 @@ async def test_inmemory_shared_registry() -> None:
 async def test_inmemory_shared_counter() -> None:
     """Two backends sharing a registry draw from the same sequence counter."""
     registry = InMemoryBackend.create_registry()
-    b1 = InMemoryBackend(_registry=registry)
-    b2 = InMemoryBackend(_registry=registry)
+    b1 = InMemoryBackend(registry=registry)
+    b2 = InMemoryBackend(registry=registry)
 
     s1 = await b1.next_sequence()
     s2 = await b2.next_sequence()
@@ -116,7 +116,7 @@ async def test_one_winner_inmemory(N: int) -> None:
     registry = InMemoryBackend.create_registry()
 
     async def run_node() -> ElectionResult:
-        backend = InMemoryBackend(_registry=registry)
+        backend = InMemoryBackend(registry=registry)
         settings = _fast_settings()
         async with Coordinator(backend, settings=settings) as result:
             await asyncio.sleep(settings.election_interval.total_seconds() * 2)
@@ -150,7 +150,7 @@ async def test_election_result_object_identity() -> None:
 async def test_coordinator_cleans_up_listeners() -> None:
     """After exiting the context manager, no listeners remain on the channel."""
     registry = InMemoryBackend.create_registry()
-    backend = InMemoryBackend(_registry=registry)
+    backend = InMemoryBackend(registry=registry)
     settings = _fast_settings()
 
     async with Coordinator(backend, settings=settings):
@@ -180,7 +180,7 @@ async def test_higher_sequence_wins() -> None:
     results: list[tuple[int, ElectionResult]] = []
 
     async def run_node() -> None:
-        backend = InMemoryBackend(_registry=registry)
+        backend = InMemoryBackend(registry=registry)
         settings = _fast_settings()
         async with Coordinator(backend, settings=settings) as result:
             await asyncio.sleep(settings.election_interval.total_seconds() * 2)

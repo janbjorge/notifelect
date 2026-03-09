@@ -16,7 +16,7 @@ class MessageFactory:
     settings: Settings
     channel: models.Channel
 
-    def _build(
+    def build(
         self,
         type: Literal["Ping", "Pong"],
         sequence: models.Sequence,
@@ -32,11 +32,11 @@ class MessageFactory:
         )
 
     def pong(self) -> models.MessageExchange:
-        return self._build("Pong", self.settings.sequence)
+        return self.build("Pong", self.settings.sequence)
 
     def ping(self) -> models.MessageExchange:
-        return self._build("Ping", self.settings.sequence)
+        return self.build("Ping", self.settings.sequence)
 
     def zero_ping(self) -> models.MessageExchange:
         """Emit a sequence-0 ping to trigger an immediate re-election."""
-        return self._build("Ping", models.Sequence(0))
+        return self.build("Ping", models.Sequence(0))

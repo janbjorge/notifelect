@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator, Awaitable, Callable, Generator
+from typing import AsyncGenerator, Awaitable, Callable, Generator
 
 import asyncpg
 import pytest
@@ -34,7 +34,7 @@ async def _install_schema(postgres_container: PostgresContainer) -> AsyncGenerat
 @pytest.fixture()
 def create_pg_connection(
     postgres_container: PostgresContainer,
-) -> Callable[[], Awaitable[Any]]:
+) -> Callable[[], Awaitable[asyncpg.Connection]]:
     """Returns a callable that creates a new asyncpg connection (a coroutine)."""
 
     async def _connect() -> asyncpg.Connection:

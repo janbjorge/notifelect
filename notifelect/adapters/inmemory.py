@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
-from typing import Any, Callable
+from typing import TypedDict
+
+from notifelect.models import Listener
+
+
+class Registry(TypedDict):
+    listeners: dict[str, list[Listener]]
+    counter: itertools.count[int]
 
 
 @dataclasses.dataclass
@@ -17,22 +24,22 @@ class InMemoryBackend:
     Usage for multi-node tests::
 
         registry = InMemoryBackend.create_registry()
-        b1 = InMemoryBackend(_registry=registry)
-        b2 = InMemoryBackend(_registry=registry)
+        b1 = InMemoryBackend(registry=registry)
+        b2 = InMemoryBackend(registry=registry)
     """
 
-    _channel: str = dataclasses.field(default="ch_test")
-    _registry: dict[str, Any] | None = dataclasses.field(
+    channel_name: str = dataclasses.field(default="ch_test")
+    registry: Registry | None = dataclasses.field(
         default=None,
         repr=False,
     )
 
     def __post_init__(self) -> None:
-        if self._registry is None:
-            self._registry = self.create_registry()
+        if self.registry is None:
+            self.registry = self.create_registry()
 
     @staticmethod
-    def create_registry() -> dict[str, Any]:
+    def create_registry() -> Registry:
         """Create a shared registry for multi-node setups."""
         return {
             "listeners": {},
@@ -41,36 +48,36 @@ class InMemoryBackend:
 
     @property
     def channel(self) -> str:
-        return self._channel
+        return self.channel_name
 
-    def _listeners(self) -> dict[str, list[Callable[..., Any]]]:
-        assert self._registry is not None
-        return self._registry["listeners"]
+    def get_listeners(self) -> dict[str, list[Listener]]:
+        assert self.registry is not None
+        return self.registry["listeners"]
 
-    def _counter(self) -> itertools.count[int]:
-        assert self._registry is not None
-        return self._registry["counter"]
+    def get_counter(self) -> itertools.count[int]:
+        assert self.registry is not None
+        return self.registry["counter"]
 
     async def next_sequence(self) -> int:
-        return next(self._counter())
+        return next(self.get_counter())
 
     async def publish(self, channel: str, payload: str) -> None:
-        for callback in list(self._listeners().get(channel, [])):
+        for callback in list(self.get_listeners().get(channel, [])):
             callback(payload)
 
     async def subscribe(
         self,
         channel: str,
-        callback: Callable[..., Any],
+        callback: Listener,
     ) -> None:
-        self._listeners().setdefault(channel, []).append(callback)
+        self.get_listeners().setdefault(channel, []).append(callback)
 
     async def unsubscribe(
         self,
         channel: str,
-        callback: Callable[..., Any],
+        callback: Listener,
     ) -> None:
-        listeners = self._listeners().get(channel, [])
+        listeners = self.get_listeners().get(channel, [])
         if callback in listeners:
             listeners.remove(callback)
 

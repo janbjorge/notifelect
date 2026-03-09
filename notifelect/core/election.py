@@ -23,7 +23,7 @@ class ElectionRound:
     """Runs periodic election rounds, collecting ballots and picking a winner."""
 
     settings: Settings
-    _messages: MessageFactory
+    messages: MessageFactory
 
     ballots: list[models.MessageExchange] = dataclasses.field(
         default_factory=list,
@@ -33,16 +33,16 @@ class ElectionRound:
         default_factory=ElectionResult,
         init=False,
     )
-    _shutdown: asyncio.Event = dataclasses.field(
+    shutdown_event: asyncio.Event = dataclasses.field(
         default_factory=asyncio.Event,
         init=False,
     )
 
-    async def _sleep_unless_shutdown(self, duration: timedelta) -> bool:
+    async def sleep_unless_shutdown(self, duration: timedelta) -> bool:
         """Sleep for *duration*. Returns True if time elapsed, False if shutdown was signalled."""
         try:
             await asyncio.wait_for(
-                self._shutdown.wait(),
+                self.shutdown_event.wait(),
                 timeout=duration.total_seconds(),
             )
             return False  # shutdown was signalled
@@ -51,18 +51,18 @@ class ElectionRound:
 
     def shutdown(self) -> None:
         """Signal the election loop to stop."""
-        self._shutdown.set()
+        self.shutdown_event.set()
 
     async def run(self, outbox: asyncio.Queue[models.MessageExchange]) -> None:
         """Election loop: ping, collect pongs, pick winner, repeat."""
-        while not self._shutdown.is_set():
-            if not await self._sleep_unless_shutdown(self.settings.election_interval):
+        while not self.shutdown_event.is_set():
+            if not await self.sleep_unless_shutdown(self.settings.election_interval):
                 return
 
             logconfig.logger.debug("Election ping emitted")
-            outbox.put_nowait(self._messages.ping())
+            outbox.put_nowait(self.messages.ping())
 
-            if not await self._sleep_unless_shutdown(self.settings.election_timeout):
+            if not await self.sleep_unless_shutdown(self.settings.election_timeout):
                 return
 
             if self.ballots:
@@ -95,25 +95,25 @@ class Coordinator:
 
     settings: Settings = dataclasses.field(default_factory=Settings)
 
-    _tasks: TaskManager = dataclasses.field(
+    tasks: TaskManager = dataclasses.field(
         default_factory=TaskManager,
         init=False,
     )
-    _round: ElectionRound = dataclasses.field(init=False)
-    _messages: MessageFactory = dataclasses.field(init=False)
-    _outbox: asyncio.Queue[models.MessageExchange] = dataclasses.field(
+    round: ElectionRound = dataclasses.field(init=False)
+    messages: MessageFactory = dataclasses.field(init=False)
+    outbox: asyncio.Queue[models.MessageExchange] = dataclasses.field(
         default_factory=asyncio.Queue,
         init=False,
     )
 
     def __post_init__(self) -> None:
-        self._messages = MessageFactory(
+        self.messages = MessageFactory(
             self.settings,
             models.Channel(self.backend.channel),
         )
-        self._round = ElectionRound(self.settings, self._messages)
+        self.round = ElectionRound(self.settings, self.messages)
 
-    def _handle_ping(self, ping: models.MessageExchange) -> None:
+    def handle_ping(self, ping: models.MessageExchange) -> None:
         logconfig.logger.debug(
             "Ping received: message_id=%s, process_id=%s, sequence=%d",
             ping.message_id,
@@ -133,17 +133,17 @@ class Coordinator:
                 self.settings.sequence,
                 ping.sequence,
             )
-            self._outbox.put_nowait(self._messages.pong())
+            self.outbox.put_nowait(self.messages.pong())
 
-    def _handle_pong(self, pong: models.MessageExchange) -> None:
+    def handle_pong(self, pong: models.MessageExchange) -> None:
         logconfig.logger.debug(
             "Pong received: message_id=%s, process_id=%s",
             pong.message_id,
             pong.process_id,
         )
-        self._round.ballots.append(pong)
+        self.round.ballots.append(pong)
 
-    def _on_notification(self, *args: object) -> None:
+    def on_notification(self, *args: object) -> None:
         """Listener callback invoked by the backend adapter."""
         payload = str(args[-1])
         logconfig.logger.debug("Notification payload: %s", payload)
@@ -163,17 +163,17 @@ class Coordinator:
             return
 
         if parsed.type == "Ping":
-            self._handle_ping(parsed)
+            self.handle_ping(parsed)
         elif parsed.type == "Pong":
-            self._handle_pong(parsed)
+            self.handle_pong(parsed)
         else:
             logconfig.logger.error("Unknown message type: %s", parsed.type)
             raise NotImplementedError(parsed)
 
-    async def _outbox_worker(self) -> None:
+    async def outbox_worker(self) -> None:
         """Drain the outbox queue, sending messages one at a time."""
         while True:
-            message = await self._outbox.get()
+            message = await self.outbox.get()
             try:
                 await self.backend.publish(
                     self.backend.channel,
@@ -186,35 +186,35 @@ class Coordinator:
         self.settings.sequence = models.Sequence(
             await self.backend.next_sequence(),
         )
-        self._tasks.add(asyncio.create_task(self._outbox_worker()))
-        self._tasks.add(asyncio.create_task(self._round.run(self._outbox)))
+        self.tasks.add(asyncio.create_task(self.outbox_worker()))
+        self.tasks.add(asyncio.create_task(self.round.run(self.outbox)))
         await self.backend.subscribe(
             self.backend.channel,
-            self._on_notification,
+            self.on_notification,
         )
 
         # Announce ourselves to trigger an immediate election.
-        self._outbox.put_nowait(self._messages.ping())
-        return self._round.result
+        self.outbox.put_nowait(self.messages.ping())
+        return self.round.result
 
     async def __aexit__(self, *_: object) -> None:
         # 1. Stop the election loop so no more pings are enqueued.
-        self._round.shutdown()
+        self.round.shutdown()
         # 2. Send a zero-ping so the next-in-line can win quickly.
-        self._outbox.put_nowait(self._messages.zero_ping())
+        self.outbox.put_nowait(self.messages.zero_ping())
         # 3. Cancel running tasks and wait for them to finish.
-        for task in list(self._tasks.tasks):
+        for task in list(self.tasks.tasks):
             task.cancel()
-        await asyncio.gather(*self._tasks.tasks, return_exceptions=True)
+        await asyncio.gather(*self.tasks.tasks, return_exceptions=True)
         # 4. Remove listener so no more notifications enqueue pongs.
         await self.backend.unsubscribe(
             self.backend.channel,
-            self._on_notification,
+            self.on_notification,
         )
         # 5. Drain any remaining outbox messages serially.
-        while not self._outbox.empty():
+        while not self.outbox.empty():
             try:
-                message = self._outbox.get_nowait()
+                message = self.outbox.get_nowait()
                 await self.backend.publish(
                     self.backend.channel,
                     message.model_dump_json(),
@@ -224,5 +224,5 @@ class Coordinator:
         # 6. Give the next-in-line a chance to win quickly.
         await self.backend.publish(
             self.backend.channel,
-            self._messages.zero_ping().model_dump_json(),
+            self.messages.zero_ping().model_dump_json(),
         )

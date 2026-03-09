@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Literal, NewType
+from typing import Callable, Literal, NewType
 
 from pydantic import UUID4, AwareDatetime, BaseModel
 
 Channel = NewType("Channel", str)
+Listener = Callable[..., None]
 Namespace = NewType("Namespace", str)
 Sequence = NewType("Sequence", int)
 

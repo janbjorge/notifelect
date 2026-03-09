@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import os
-from typing import Any, Callable, Final
+from typing import Final
 
 import asyncpg
 
 from notifelect import models
+from notifelect.models import Listener
 
 
 def with_prefix(name: str) -> str:
@@ -46,18 +47,18 @@ class PostgreSQLBackend:
 
     connection: asyncpg.Connection
     sql: SQLBuilder = dataclasses.field(default_factory=SQLBuilder)
-    _lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock, init=False)
+    lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock, init=False)
 
     @property
     def channel(self) -> str:
         return self.sql.channel
 
     async def next_sequence(self) -> int:
-        async with self._lock:
+        async with self.lock:
             return int(await self.connection.fetchval(self.sql.next_sequence_sql()))
 
     async def publish(self, channel: str, payload: str) -> None:
-        async with self._lock:
+        async with self.lock:
             await self.connection.execute(
                 self.sql.notify_sql(),
                 payload,
@@ -66,21 +67,21 @@ class PostgreSQLBackend:
     async def subscribe(
         self,
         channel: str,
-        callback: Callable[..., Any],
+        callback: Listener,
     ) -> None:
         await self.connection.add_listener(channel, callback)
 
     async def unsubscribe(
         self,
         channel: str,
-        callback: Callable[..., Any],
+        callback: Listener,
     ) -> None:
         await self.connection.remove_listener(channel, callback)
 
     async def install(self) -> None:
-        async with self._lock:
+        async with self.lock:
             await self.connection.execute(self.sql.install_sql())
 
     async def uninstall(self) -> None:
-        async with self._lock:
+        async with self.lock:
             await self.connection.execute(self.sql.uninstall_sql())
