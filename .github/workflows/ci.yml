@@ -12,24 +12,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up python
-        uses: actions/setup-python@v4
-      - name: Install dev-env.
-        run: |
-          pip install -U pip
-          pip install ".[dev]"
+      - uses: astral-sh/setup-uv@v4
+      - name: Install dev-env
+        run: uv sync --extra dev
 
       - name: Ruff check
         if: ${{ always() }}
-        run: ruff check .
+        run: uv run ruff check .
 
       - name: Ruff format
         if: ${{ always() }}
-        run: ruff format . --check
+        run: uv run ruff format . --check
 
       - name: Mypy
         if: ${{ always() }}
-        run: mypy .
+        run: uv run mypy .
 
   test-notifelect:
     strategy:
@@ -44,16 +41,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: astral-sh/setup-uv@v4
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install notifelect
-        run: |
-          pip install pip -U
-          pip install ".[dev]"
+        run: uv sync --extra dev
 
       - name: Full test
-        run: pytest -vs
+        run: uv run pytest -vs
