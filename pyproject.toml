@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "setuptools.build_meta"
-requires = ["pip>=22.0.0", "setuptools", "setuptools_scm", "wheel"]
+requires = ["setuptools", "setuptools_scm"]
 
 [project]
 authors = [{ name = "janbjorge"}]

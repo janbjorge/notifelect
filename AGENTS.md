@@ -9,10 +9,7 @@ Package manager is **uv**. Build system is setuptools with setuptools-scm (versi
 
 ```bash
 # Install in development mode with all dev dependencies
-uv pip install -e ".[dev]"
-
-# Or with plain pip
-pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
 ## Lint & Type Check
@@ -20,10 +17,10 @@ pip install -e ".[dev]"
 CI runs all three checks independently -- all must pass:
 
 ```bash
-ruff check .              # Linting (rules: C, E, F, I, PIE, Q, RET, RSE, SIM, W, C90)
-ruff format . --check     # Formatting check (line-length = 100)
-ruff format .             # Auto-format in place
-mypy .                    # Type checking (strict: disallow_untyped_defs, pydantic plugin)
+uv run ruff check .              # Linting (rules: C, E, F, I, PIE, Q, RET, RSE, SIM, W, C90)
+uv run ruff format . --check     # Formatting check (line-length = 100)
+uv run ruff format .             # Auto-format in place
+uv run mypy .                    # Type checking (strict: disallow_untyped_defs, pydantic plugin)
 ```
 
 ## Tests
@@ -33,16 +30,16 @@ Tests require Docker (testcontainers spins up PostgreSQL 16).
 
 ```bash
 # Run all tests (verbose, no capture -- matches CI)
-pytest -vs
+uv run pytest -vs
 
 # Run a single test file
-pytest -vs test/test_election.py
+uv run pytest -vs test/test_election.py
 
 # Run a single test by name
-pytest -vs -k "test_one_winner"
+uv run pytest -vs -k "test_one_winner"
 
 # Run a single parametrized variant
-pytest -vs -k "test_one_winner[1]"
+uv run pytest -vs -k "test_one_winner[1]"
 ```
 
 Test directory structure:
