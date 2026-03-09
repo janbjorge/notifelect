@@ -8,88 +8,60 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     import asyncpg
 
+from notifelect import models
 
-from . import models
 
-
-def add_prefix(string: str) -> str:
-    """
-    Appends a predefined prefix from environment variables to
-    the given string, typically used for database object names.
-    """
-    return f"{os.environ.get('NOTIFELECT_PREFIX', '')}{string}"
+def with_prefix(name: str) -> str:
+    """Prepend the NOTIFELECT_PREFIX environment variable to a database object name."""
+    return f"{os.environ.get('NOTIFELECT_PREFIX', '')}{name}"
 
 
 @dataclasses.dataclass
-class QueryBuilder:
+class SQLBuilder:
     channel: Final[models.Channel] = dataclasses.field(
-        default_factory=lambda: models.Channel(add_prefix("ch_notifelect")),
+        default_factory=lambda: models.Channel(with_prefix("ch_notifelect")),
         kw_only=True,
     )
 
-    sequence: Final[str] = dataclasses.field(
-        default_factory=lambda: add_prefix("seq_notifelect"),
+    sequence_name: Final[str] = dataclasses.field(
+        default_factory=lambda: with_prefix("seq_notifelect"),
         kw_only=True,
     )
 
-    def create_install_query(self) -> str:
-        """
-        Generates the SQL query string to create necessary database objects.
-        """
-        return f"""
-    CREATE SEQUENCE {self.sequence} START 1;
-    """
+    def install_sql(self) -> str:
+        return f"CREATE SEQUENCE {self.sequence_name} START 1;"
 
-    def create_uninstall_query(self) -> str:
-        """
-        Generates the SQL query string to remove all database structures
-        related to the job queue system.
-        """
-        return f"""
-    DROP SEQUENCE {self.sequence};
-    """
+    def uninstall_sql(self) -> str:
+        return f"DROP SEQUENCE {self.sequence_name};"
 
-    def create_next_sequence_query(self) -> str:
-        return f"""
-    SELECT nextval('{self.sequence}');
-    """
+    def next_sequence_sql(self) -> str:
+        return f"SELECT nextval('{self.sequence_name}');"
 
-    def create_notify_query(self) -> str:
-        return f"""
-    SELECT pg_notify('{self.channel}', $1);
-    """
+    def notify_sql(self) -> str:
+        return f"SELECT pg_notify('{self.channel}', $1);"
 
 
 @dataclasses.dataclass
 class Queries:
     connection: asyncpg.Connection
-    query_builder: QueryBuilder = dataclasses.field(
-        default_factory=QueryBuilder,
-    )
-    lock: asyncio.Lock = dataclasses.field(
-        default_factory=asyncio.Lock,
-        init=False,
-    )
+    sql: SQLBuilder = dataclasses.field(default_factory=SQLBuilder)
+    lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock, init=False)
 
     async def install(self) -> None:
         async with self.lock:
-            await self.connection.execute(self.query_builder.create_install_query())
+            await self.connection.execute(self.sql.install_sql())
 
     async def uninstall(self) -> None:
         async with self.lock:
-            await self.connection.execute(self.query_builder.create_uninstall_query())
+            await self.connection.execute(self.sql.uninstall_sql())
 
-    async def sequence(self) -> models.Sequence:
+    async def next_sequence(self) -> models.Sequence:
         async with self.lock:
-            return models.Sequence(
-                await self.connection.fetchval(
-                    self.query_builder.create_next_sequence_query(),
-                )
-            )
+            return models.Sequence(await self.connection.fetchval(self.sql.next_sequence_sql()))
 
-    async def notify(self, event: models.BaseModel) -> None:
+    async def notify(self, message: models.MessageExchange) -> None:
         async with self.lock:
             await self.connection.execute(
-                self.query_builder.create_notify_query(),
-                event.model_dump_json(),
+                self.sql.notify_sql(),
+                message.model_dump_json(),
             )

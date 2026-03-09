@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from notifelect.tm import TaskManager
+from notifelect.task_manager import TaskManager
 
 
 @pytest.mark.parametrize("N", (1, 2, 3, 5, 64))

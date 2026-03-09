@@ -15,7 +15,7 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
 
 @pytest.fixture(scope="session", autouse=True)
 async def _install_schema(postgres_container: PostgresContainer) -> AsyncGenerator[None, None]:
-    from notifelect.queries import QueryBuilder
+    from notifelect.queries import SQLBuilder
 
     conn = await asyncpg.connect(
         host=postgres_container.get_container_host_ip(),
@@ -25,7 +25,7 @@ async def _install_schema(postgres_container: PostgresContainer) -> AsyncGenerat
         database=postgres_container.dbname,
     )
     try:
-        await conn.execute(QueryBuilder().create_install_query())
+        await conn.execute(SQLBuilder().install_sql())
     finally:
         await conn.close()
     yield

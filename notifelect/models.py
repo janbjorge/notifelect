@@ -4,20 +4,9 @@ from typing import Literal, NewType
 
 from pydantic import UUID4, AwareDatetime, BaseModel
 
-Channel = NewType(
-    "Channel",
-    str,
-)
-
-Namespace = NewType(
-    "Namespace",
-    str,
-)
-
-Sequence = NewType(
-    "Sequence",
-    int,
-)
+Channel = NewType("Channel", str)
+Namespace = NewType("Namespace", str)
+Sequence = NewType("Sequence", int)
 
 
 class MessageExchange(BaseModel):
