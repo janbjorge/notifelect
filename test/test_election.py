@@ -8,7 +8,7 @@ from typing import Any, AsyncGenerator, Awaitable, Callable
 import asyncpg
 import pytest
 
-from notifelect.election_manager import Coordinator, Outcome, Settings
+from notifelect.election import Coordinator, ElectionResult, Settings
 
 
 @contextlib.asynccontextmanager
@@ -27,17 +27,17 @@ async def test_one_winner(
     N: int,
     create_pg_connection: Callable[[], Awaitable[Any]],
 ) -> None:
-    async def process() -> Outcome:
+    async def process() -> ElectionResult:
         settings = Settings(
             election_interval=timedelta(seconds=0.5),
             election_timeout=timedelta(seconds=0.1),
         )
         async with (
             _managed_connection(create_pg_connection) as conn,
-            Coordinator(conn, settings=settings) as outcome,
+            Coordinator(conn, settings=settings) as result,
         ):
             await asyncio.sleep(settings.election_interval.total_seconds() * 2)
-            return outcome
+            return result
 
-    outcomes = await asyncio.gather(*[process() for _ in range(N)])
-    assert sum(o.winner for o in outcomes) == 1
+    results = await asyncio.gather(*[process() for _ in range(N)])
+    assert sum(r.winner for r in results) == 1

@@ -7,25 +7,25 @@ import os
 import asyncpg
 
 from notifelect.models import MessageExchange
-from notifelect.queries import Queries, QueryBuilder
+from notifelect.queries import Queries, SQLBuilder
 
 
-def cliparser() -> argparse.Namespace:
-    common_arguments = argparse.ArgumentParser(
+def parse_args() -> argparse.Namespace:
+    common = argparse.ArgumentParser(
         add_help=False,
         prog="notifelect",
     )
 
-    common_arguments.add_argument(
+    common.add_argument(
         "--prefix",
         default="",
         help=(
-            "All notifelect sequence will start with this prefix. "
-            "(If set, addinal config is required.)"
+            "All notifelect sequences will start with this prefix. "
+            "(If set, additional configuration is required.)"
         ),
     )
 
-    common_arguments.add_argument(
+    common.add_argument(
         "--pg-dsn",
         help=(
             "Connection string in the libpq URI format, including host, port, user, "
@@ -37,7 +37,7 @@ def cliparser() -> argparse.Namespace:
         default=os.environ.get("PGDSN"),
     )
 
-    common_arguments.add_argument(
+    common.add_argument(
         "--pg-host",
         help=(
             "Database host address, which can be an IP or domain name. "
@@ -46,33 +46,33 @@ def cliparser() -> argparse.Namespace:
         default=os.environ.get("PGHOST"),
     )
 
-    common_arguments.add_argument(
+    common.add_argument(
         "--pg-port",
         help=(
-            "Port number for the server host Defaults to PGPORT environment variable "
-            "or 5432 if not set."
+            "Port number for the server host. "
+            "Defaults to PGPORT environment variable or 5432 if not set."
         ),
         default=os.environ.get("PGPORT", "5432"),
     )
 
-    common_arguments.add_argument(
+    common.add_argument(
         "--pg-user",
         help=("Database role for authentication. Defaults to PGUSER environment variable if set."),
         default=os.environ.get("PGUSER"),
     )
 
-    common_arguments.add_argument(
+    common.add_argument(
         "--pg-database",
         help=(
-            "Name of the database to connect to. Defaults to PGDATABASE environment "
-            "variable if set."
+            "Name of the database to connect to. "
+            "Defaults to PGDATABASE environment variable if set."
         ),
         default=os.environ.get("PGDATABASE"),
     )
 
-    common_arguments.add_argument(
+    common.add_argument(
         "--pg-password",
-        help=("Password for authentication. Defaults to PGPASSWORD environment variable if set"),
+        help=("Password for authentication. Defaults to PGPASSWORD environment variable if set."),
         default=os.environ.get("PGPASSWORD"),
     )
 
@@ -81,52 +81,49 @@ def cliparser() -> argparse.Namespace:
         prog="notifelect",
     )
 
-    subparsers = parser.add_subparsers(
-        dest="command",
-        required=True,
-    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser(
         "install",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        parents=[common_arguments],
+        parents=[common],
     ).add_argument(
         "--dry-run",
         action="store_true",
         help=(
-            "Prints the SQL statements that would be executed without actually "
-            " applying any changes to the database."
+            "Print the SQL statements that would be executed without "
+            "applying any changes to the database."
         ),
     )
 
     subparsers.add_parser(
         "uninstall",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        parents=[common_arguments],
+        parents=[common],
     ).add_argument(
         "--dry-run",
         action="store_true",
         help=(
-            "Prints the SQL statements that would be executed without "
-            "actually applying any changes to the database."
+            "Print the SQL statements that would be executed without "
+            "applying any changes to the database."
         ),
     )
 
     listen_parser = subparsers.add_parser(
         "listen",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        parents=[common_arguments],
+        parents=[common],
     )
     listen_parser.add_argument(
         "--channel",
-        help="Specifies the PostgreSQL NOTIFY channel to listen on for debug purposes.",
-        default=QueryBuilder().channel,
+        help="PostgreSQL NOTIFY channel to listen on for debug purposes.",
+        default=SQLBuilder().channel,
     )
 
     return parser.parse_args()
 
 
-async def connection(parsed: argparse.Namespace) -> asyncpg.Connection:
+async def connect(parsed: argparse.Namespace) -> asyncpg.Connection:
     return await asyncpg.connect(
         dsn=parsed.pg_dsn or None,
         host=parsed.pg_host or None,
@@ -136,8 +133,8 @@ async def connection(parsed: argparse.Namespace) -> asyncpg.Connection:
     )
 
 
-async def main() -> None:  # noqa: C901
-    parsed = cliparser()
+async def main() -> None:
+    parsed = parse_args()
 
     if (
         "NOTIFELECT_PREFIX" not in os.environ
@@ -146,20 +143,21 @@ async def main() -> None:  # noqa: C901
     ):
         os.environ["NOTIFELECT_PREFIX"] = prefix
 
+    sql = SQLBuilder()
+
     match parsed.command:
         case "install":
-            print(QueryBuilder().create_install_query())
+            print(sql.install_sql())
             if not parsed.dry_run:
-                await Queries(await connection(parsed)).install()
+                await Queries(await connect(parsed)).install()
         case "uninstall":
-            print(QueryBuilder().create_uninstall_query())
+            print(sql.uninstall_sql())
             if not parsed.dry_run:
-                await Queries(await connection(parsed)).uninstall()
+                await Queries(await connect(parsed)).uninstall()
         case "listen":
-            conn = await connection(parsed)
+            conn = await connect(parsed)
             await conn.add_listener(
-                QueryBuilder().channel,
+                sql.channel,
                 lambda *x: print(repr(MessageExchange.model_validate_json(x[-1]))),
             )
-
             await asyncio.Future()
