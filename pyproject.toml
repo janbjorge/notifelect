@@ -49,6 +49,7 @@ dev = [
     "pytest-asyncio",
     "pytest",
     "ruff",
+    "testcontainers[postgres]",
 ]
 docs = [
     "myst-parser",
