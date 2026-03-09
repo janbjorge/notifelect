@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     import asyncpg
 
-from . import models
+from notifelect import models
 
 
 def with_prefix(name: str) -> str:

@@ -6,7 +6,7 @@ from typing import AsyncGenerator
 
 import asyncpg
 
-from notifelect import election_manager
+from notifelect import election
 
 
 @contextlib.asynccontextmanager
@@ -22,7 +22,7 @@ async def process() -> None:
     await asyncio.sleep(random.random() * 2)
     async with (
         connection() as conn,
-        election_manager.Coordinator(conn),
+        election.Coordinator(conn),
     ):
         await asyncio.sleep(float("inf"))
 
