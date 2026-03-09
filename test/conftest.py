@@ -15,7 +15,7 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
 
 @pytest.fixture(scope="session", autouse=True)
 async def _install_schema(postgres_container: PostgresContainer) -> AsyncGenerator[None, None]:
-    from notifelect.queries import SQLBuilder
+    from notifelect.adapters.postgresql import SQLBuilder
 
     conn = await asyncpg.connect(
         host=postgres_container.get_container_host_ip(),

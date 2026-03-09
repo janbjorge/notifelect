@@ -8,7 +8,9 @@ from typing import Any, AsyncGenerator, Awaitable, Callable
 import asyncpg
 import pytest
 
-from notifelect.election import Coordinator, ElectionResult, Settings
+from notifelect.adapters.postgresql import PostgreSQLBackend
+from notifelect.core.election import Coordinator, ElectionResult
+from notifelect.core.settings import Settings
 
 
 @contextlib.asynccontextmanager
@@ -34,7 +36,7 @@ async def test_one_winner(
         )
         async with (
             _managed_connection(create_pg_connection) as conn,
-            Coordinator(conn, settings=settings) as result,
+            Coordinator(PostgreSQLBackend(conn), settings=settings) as result,
         ):
             await asyncio.sleep(settings.election_interval.total_seconds() * 2)
             return result

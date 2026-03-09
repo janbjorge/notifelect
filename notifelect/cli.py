@@ -6,8 +6,8 @@ import os
 
 import asyncpg
 
+from notifelect.adapters.postgresql import PostgreSQLBackend, SQLBuilder
 from notifelect.models import MessageExchange
-from notifelect.queries import Queries, SQLBuilder
 
 
 def parse_args() -> argparse.Namespace:
@@ -149,11 +149,11 @@ async def main() -> None:
         case "install":
             print(sql.install_sql())
             if not parsed.dry_run:
-                await Queries(await connect(parsed)).install()
+                await PostgreSQLBackend(await connect(parsed)).install()
         case "uninstall":
             print(sql.uninstall_sql())
             if not parsed.dry_run:
-                await Queries(await connect(parsed)).uninstall()
+                await PostgreSQLBackend(await connect(parsed)).uninstall()
         case "listen":
             conn = await connect(parsed)
             await conn.add_listener(

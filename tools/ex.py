@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 import asyncpg
 
 from notifelect import election
+from notifelect.adapters.postgresql import PostgreSQLBackend
 
 
 @contextlib.asynccontextmanager
@@ -22,7 +23,7 @@ async def process() -> None:
     await asyncio.sleep(random.random() * 2)
     async with (
         connection() as conn,
-        election.Coordinator(conn),
+        election.Coordinator(PostgreSQLBackend(conn)),
     ):
         await asyncio.sleep(float("inf"))
 

@@ -4,7 +4,7 @@ requires = ["setuptools", "setuptools_scm"]
 
 [project]
 authors = [{ name = "janbjorge"}]
-description = "A distributed leader election python package using postgresql notify."
+description = "A distributed leader election python package with pluggable backends."
 dynamic = ["version"]
 license = { text = "MIT License" }
 name = "notifelect"
