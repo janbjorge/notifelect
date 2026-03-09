@@ -96,6 +96,13 @@ Channel = NewType("Channel", str)
 type: Literal["Ping", "Pong"]
 ```
 
+**Never use `Any` or wide/untyped containers.** Every type must be fully specified:
+
+- Forbidden: `Any`, `dict`, `list`, `tuple`, `set` (bare, without type parameters)
+- Required: use concrete, narrow types -- `dict[str, int]`, `list[str]`, `tuple[int, ...]`
+- Prefer named `TypedDict`, `dataclass`, or Pydantic model over `dict[str, Any]`
+- Use `object` only as a last resort; never use `Any` to silence type errors
+
 ### Naming Conventions
 
 - **Functions/methods**: `snake_case`

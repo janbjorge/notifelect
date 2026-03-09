@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator, Awaitable, Callable, Generator
+from typing import AsyncGenerator, Awaitable, Callable, Generator
 
 import asyncpg
 import pytest
@@ -15,7 +15,7 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
 
 @pytest.fixture(scope="session", autouse=True)
 async def _install_schema(postgres_container: PostgresContainer) -> AsyncGenerator[None, None]:
-    from notifelect.queries import SQLBuilder
+    from notifelect.adapters.postgresql import SQLBuilder
 
     conn = await asyncpg.connect(
         host=postgres_container.get_container_host_ip(),
@@ -34,7 +34,7 @@ async def _install_schema(postgres_container: PostgresContainer) -> AsyncGenerat
 @pytest.fixture()
 def create_pg_connection(
     postgres_container: PostgresContainer,
-) -> Callable[[], Awaitable[Any]]:
+) -> Callable[[], Awaitable[asyncpg.Connection]]:
     """Returns a callable that creates a new asyncpg connection (a coroutine)."""
 
     async def _connect() -> asyncpg.Connection:
