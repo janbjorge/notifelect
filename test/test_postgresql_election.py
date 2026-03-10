@@ -31,14 +31,14 @@ async def test_one_winner(
 ) -> None:
     async def process() -> ElectionResult:
         settings = Settings(
-            election_interval=timedelta(seconds=0.5),
-            election_timeout=timedelta(seconds=0.1),
+            election_interval=timedelta(seconds=0.1),
+            election_timeout=timedelta(seconds=0.05),
         )
         async with (
             _managed_connection(create_pg_connection) as conn,
             Coordinator(PostgreSQLBackend(conn), settings=settings) as result,
         ):
-            await asyncio.sleep(settings.election_interval.total_seconds() * 2)
+            await result.round_complete.wait()
             return result
 
     results = await asyncio.gather(*[process() for _ in range(N)])
