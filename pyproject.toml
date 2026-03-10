@@ -30,7 +30,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "asyncpg",
     "pydantic>=2.0.0",
 ]
 
@@ -41,15 +40,22 @@ Issues = "https://github.com/janbjorge/notifelect/issues"
 Repository = "https://github.com/janbjorge/notifelect/"
 
 [project.optional-dependencies]
+asyncpg = [
+    "asyncpg>=0.27.0",
+]
+redis = [
+    "redis>=7.0.0",
+]
 dev = [
-    "asyncpg",
+    "asyncpg>=0.27.0",
     "asyncpg-stubs",
     "mypy-extensions",
     "mypy",
     "pytest-asyncio",
     "pytest",
+    "redis>=7.0.0",
     "ruff",
-    "testcontainers[postgres]",
+    "testcontainers[postgres,redis]",
 ]
 docs = [
     "myst-parser",
@@ -94,3 +100,5 @@ warn_unused_ignores = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+

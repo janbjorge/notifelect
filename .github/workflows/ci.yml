@@ -28,15 +28,14 @@ jobs:
         if: ${{ always() }}
         run: uv run mypy .
 
-  test-notifelect:
+  test-inmemory:
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-        os: [ubuntu-latest]
 
-    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: In-memory / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
@@ -44,9 +43,47 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           python-version: ${{ matrix.python-version }}
-
       - name: Install notifelect
         run: uv sync --extra dev
+      - name: Run in-memory tests
+        run: uv run pytest -vs test/test_inmemory_election.py test/test_tm.py
 
-      - name: Full test
-        run: uv run pytest -vs
+  test-postgresql:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    name: PostgreSQL / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install notifelect
+        run: uv sync --extra dev
+      - name: Run PostgreSQL tests
+        run: uv run pytest -vs test/test_postgresql_election.py
+
+  test-redis:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    name: Redis / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install notifelect
+        run: uv sync --extra dev
+      - name: Run Redis tests
+        run: uv run pytest -vs test/test_redis_election.py
