@@ -33,7 +33,7 @@ Tests require Docker (testcontainers spins up PostgreSQL 16).
 uv run pytest -vs
 
 # Run a single test file
-uv run pytest -vs test/test_election.py
+uv run pytest -vs test/test_postgresql_election.py
 
 # Run a single test by name
 uv run pytest -vs -k "test_one_winner"
@@ -44,7 +44,8 @@ uv run pytest -vs -k "test_one_winner[1]"
 
 Test directory structure:
 - `test/conftest.py` -- fixtures: PostgresContainer (session-scoped), schema install, connection factory
-- `test/test_election.py` -- integration tests for election logic
+- `test/test_postgresql_election.py` -- integration tests for election logic (requires Docker/PostgreSQL)
+- `test/test_inmemory_election.py` -- unit tests for election logic using InMemoryBackend (no Docker required)
 - `test/test_tm.py` -- unit tests for TaskManager
 
 ## Code Style
@@ -183,7 +184,8 @@ notifelect/           # Package
   task_manager.py     # Asyncio task lifecycle utility
 test/                 # Tests (outside package)
   conftest.py         # Shared fixtures
-  test_election.py    # Integration tests
+  test_postgresql_election.py  # Integration tests (PostgreSQL)
+  test_inmemory_election.py    # Unit tests (InMemoryBackend)
   test_tm.py          # Unit tests
 tools/
   ex.py               # Example usage script

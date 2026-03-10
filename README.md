@@ -33,6 +33,8 @@ That's the only schema change notifelect makes: a single sequence used to assign
 
 ## Quickstart
 
+### With PostgreSQL
+
 ```python
 import asyncio
 import asyncpg
@@ -52,6 +54,33 @@ asyncio.run(main())
 
 `result.winner` is a plain boolean that updates after each election round. There is no callback to register; just read the value whenever you need it.
 
+### With InMemoryBackend (no database)
+
+Useful for local development or unit tests where you want to simulate multiple nodes without a real PostgreSQL instance:
+
+```python
+import asyncio
+from notifelect import Coordinator
+from notifelect.adapters.inmemory import InMemoryBackend
+
+async def main() -> None:
+    registry = InMemoryBackend.create_registry()
+    backends = [InMemoryBackend(registry=registry) for _ in range(3)]
+
+    async with (
+        Coordinator(backends[0]) as r0,
+        Coordinator(backends[1]) as r1,
+        Coordinator(backends[2]) as r2,
+    ):
+        await asyncio.sleep(1)
+        winners = [r for r in [r0, r1, r2] if r.winner]
+        print(f"{len(winners)} winner(s)")  # always 1
+
+asyncio.run(main())
+```
+
+All nodes share the same `registry`, which acts as the in-process pub/sub bus.
+
 ## How it works
 
 Each node fetches a unique sequence number from a PostgreSQL sequence on startup. Periodically, every node broadcasts a Ping over a PostgreSQL NOTIFY channel. Nodes with a lower sequence number respond with a Pong. After a short collection window, any node that received no Pong with a higher sequence than its own declares itself the winner.
@@ -61,6 +90,8 @@ This is the [Bully algorithm](https://en.wikipedia.org/wiki/Bully_algorithm): th
 When a node exits cleanly it broadcasts a zero-sequence Ping, letting the next-highest node win in the following round without waiting for a timeout.
 
 ## Configuration
+
+`Settings` applies to any backend:
 
 ```python
 from datetime import timedelta
@@ -72,6 +103,7 @@ settings = Settings(
     election_timeout=timedelta(seconds=5),    # pong collection window (default: 5s)
 )
 
+# Works the same way with InMemoryBackend
 async with Coordinator(PostgreSQLBackend(conn), settings=settings) as result:
     ...
 ```
@@ -82,7 +114,11 @@ async with Coordinator(PostgreSQLBackend(conn), settings=settings) as result:
 
 ## Running multiple nodes
 
-Each node gets its own connection and `Coordinator`. Start as many as you like; exactly one will be the winner at any given time.
+Each node gets its own `Coordinator`. Start as many as you like; exactly one will be the winner at any given time.
+
+### With PostgreSQL (real deployment)
+
+Each node runs in its own process or container, all connecting to the same PostgreSQL database:
 
 ```python
 import asyncio
@@ -101,7 +137,25 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-In a real deployment each node runs in its own process or container and connects to the same PostgreSQL database.
+### With InMemoryBackend (local simulation)
+
+Simulate a multi-node cluster in a single process:
+
+```python
+import asyncio
+from notifelect import Coordinator
+from notifelect.adapters.inmemory import InMemoryBackend
+
+async def run_node(backend: InMemoryBackend) -> None:
+    async with Coordinator(backend) as result:
+        await asyncio.sleep(float("inf"))
+
+async def main() -> None:
+    registry = InMemoryBackend.create_registry()
+    await asyncio.gather(*[run_node(InMemoryBackend(registry=registry)) for _ in range(3)])
+
+asyncio.run(main())
+```
 
 ## Database object naming
 
@@ -170,9 +224,10 @@ notifelect ships with an `InMemoryBackend` for tests that need multiple simulate
 
 ## Testing
 
-notifelect ships with an `InMemoryBackend` that simulates the pub/sub bus in-process:
+Use `InMemoryBackend` in your test suite to simulate a multi-node cluster without Docker or a real database. All nodes share a `registry` that acts as the in-process pub/sub bus:
 
 ```python
+import asyncio
 from notifelect import Coordinator
 from notifelect.adapters.inmemory import InMemoryBackend
 

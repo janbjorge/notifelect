@@ -16,8 +16,8 @@ from notifelect.ports import BackendPort
 
 def _fast_settings() -> Settings:
     return Settings(
-        election_interval=timedelta(seconds=0.3),
-        election_timeout=timedelta(seconds=0.1),
+        election_interval=timedelta(seconds=0.05),
+        election_timeout=timedelta(seconds=0.05),
     )
 
 
@@ -101,7 +101,7 @@ async def test_single_node_wins() -> None:
     settings = _fast_settings()
 
     async with Coordinator(backend, settings=settings) as result:
-        await asyncio.sleep(settings.election_interval.total_seconds() * 2)
+        await result.round_complete.wait()
         assert result.winner is True
 
 
@@ -119,7 +119,7 @@ async def test_one_winner_inmemory(N: int) -> None:
         backend = InMemoryBackend(registry=registry)
         settings = _fast_settings()
         async with Coordinator(backend, settings=settings) as result:
-            await asyncio.sleep(settings.election_interval.total_seconds() * 2)
+            await result.round_complete.wait()
             return result
 
     results = await asyncio.gather(*[run_node() for _ in range(N)])
@@ -138,7 +138,7 @@ async def test_election_result_object_identity() -> None:
 
     async with Coordinator(backend, settings=settings) as result:
         first_id = id(result)
-        await asyncio.sleep(settings.election_interval.total_seconds() * 2)
+        await result.round_complete.wait()
         assert id(result) == first_id
 
 
@@ -183,7 +183,7 @@ async def test_higher_sequence_wins() -> None:
         backend = InMemoryBackend(registry=registry)
         settings = _fast_settings()
         async with Coordinator(backend, settings=settings) as result:
-            await asyncio.sleep(settings.election_interval.total_seconds() * 2)
+            await result.round_complete.wait()
             results.append((settings.sequence, result))
 
     await asyncio.gather(run_node(), run_node())

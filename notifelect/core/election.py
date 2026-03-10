@@ -16,6 +16,10 @@ class ElectionResult:
     """Holds whether this node won the most recent election."""
 
     winner: bool = dataclasses.field(init=False, default=False)
+    round_complete: asyncio.Event = dataclasses.field(
+        default_factory=asyncio.Event,
+        init=False,
+    )
 
 
 @dataclasses.dataclass
@@ -78,6 +82,7 @@ class ElectionRound:
                 "winner" if self.result.winner else "not winner",
                 self.settings.sequence,
             )
+            self.result.round_complete.set()
 
 
 @dataclasses.dataclass

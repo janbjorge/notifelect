@@ -133,7 +133,7 @@ imports from `adapters/`.
 
 ### Test structure
 
-- `test/test_election.py` — integration tests against PostgreSQL via `PostgreSQLBackend`.
+- `test/test_postgresql_election.py` — integration tests against PostgreSQL via `PostgreSQLBackend`.
 - `test/test_inmemory_election.py` — unit tests against `InMemoryBackend`: protocol
   conformance, single-node election, multi-node election, lifecycle cleanup, re-export
   shim verification.
