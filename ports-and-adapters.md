@@ -99,7 +99,7 @@ from notifelect.task_manager import TaskManager                        # works
 ### Directory layout
 
 ```
-notifelect/
+src/notifelect/
   __init__.py                 # Public API exports
   ports.py                    # BackendPort protocol
   models.py                   # MessageExchange, Channel, Namespace, Sequence

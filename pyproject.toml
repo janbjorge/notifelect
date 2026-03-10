@@ -63,11 +63,15 @@ docs = [
     "sphinx-rtd-theme",
 ]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.setuptools_scm]
-write_to = "notifelect/_version.py"
+write_to = "src/notifelect/_version.py"
 
 [tool.ruff]
 line-length = 100
+exclude = ["src/notifelect/_version.py"]
 
 [tool.ruff.lint]
 select = [
